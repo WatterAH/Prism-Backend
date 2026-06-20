@@ -12,6 +12,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Controlador REST para el CRUD completo de ejercicios.
+ * Expone los endpoints bajo /api/exercises.
+ * Todas las respuestas siguen la estructura: { success, data, message }.
+ */
 @RestController
 @RequestMapping("/api/exercises")
 public class ExerciseController {
@@ -19,6 +24,7 @@ public class ExerciseController {
     @Autowired
     private ExerciseRepository exerciseRepository;
 
+    // GET /api/exercises — devuelve todos los ejercicios de la base de datos
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllExercises() {
         List<Exercise> exercises = exerciseRepository.findAll();
@@ -29,6 +35,7 @@ public class ExerciseController {
         ));
     }
 
+    // GET /api/exercises/{id} — busca un ejercicio por su ID primario
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getExerciseById(@PathVariable Long id) {
         return exerciseRepository.findById(id)
@@ -44,8 +51,10 @@ public class ExerciseController {
                 )));
     }
 
+    // POST /api/exercises — crea un nuevo ejercicio con sus opciones
     @PostMapping
     public ResponseEntity<Map<String, Object>> createExercise(@RequestBody Exercise exercise) {
+        // Valida reglas de negocio antes de persistir
         String validation = validate(exercise);
         if (validation != null) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -54,6 +63,7 @@ public class ExerciseController {
                     "message", validation
             ));
         }
+        // Asigna optionOrder secuencial (1, 2, 3...) antes de guardar
         normalizeOptionOrder(exercise);
         Exercise saved = exerciseRepository.save(exercise);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
@@ -63,6 +73,7 @@ public class ExerciseController {
         ));
     }
 
+    // PUT /api/exercises/{id} — reemplaza un ejercicio existente por completo
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> updateExercise(@PathVariable Long id, @RequestBody Exercise exercise) {
         if (!exerciseRepository.existsById(id)) {
@@ -80,6 +91,7 @@ public class ExerciseController {
                     "message", validation
             ));
         }
+        // Fuerza el ID del path para que JPA haga UPDATE y no INSERT
         exercise.setExerciseId(id);
         normalizeOptionOrder(exercise);
         Exercise saved = exerciseRepository.save(exercise);
@@ -90,6 +102,7 @@ public class ExerciseController {
         ));
     }
 
+    // DELETE /api/exercises/{id} — elimina el ejercicio y sus opciones (CASCADE en BD)
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteExercise(@PathVariable Long id) {
         if (!exerciseRepository.existsById(id)) {
@@ -107,6 +120,18 @@ public class ExerciseController {
         ));
     }
 
+    /**
+     * Valida las reglas de negocio de un ejercicio antes de persistirlo.
+     * Retorna el mensaje de error si falla alguna regla, o null si todo es válido.
+     *
+     * Reglas:
+     *  1. Título no vacío
+     *  2. Instrucciones no vacías
+     *  3. Al menos 2 opciones
+     *  4. Al menos 1 opción marcada como correcta
+     *  5. SINGLE_CHOICE no puede tener más de 1 opción correcta
+     *  6. Ninguna opción puede tener texto vacío
+     */
     private String validate(Exercise ex) {
         if (ex.getTitle() == null || ex.getTitle().isBlank()) {
             return "El título es obligatorio";
@@ -133,6 +158,10 @@ public class ExerciseController {
         return null;
     }
 
+    /**
+     * Reasigna el campo optionOrder de cada opción de forma secuencial (1, 2, 3...).
+     * Esto evita huecos o duplicados en el orden cuando el usuario reordena o elimina opciones.
+     */
     private void normalizeOptionOrder(Exercise ex) {
         List<ExerciseOption> opts = ex.getOptions();
         if (opts == null) return;
